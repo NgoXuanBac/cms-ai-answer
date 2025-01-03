@@ -14,9 +14,11 @@
   "type": "commonjs",
   "description": "",
   "dependencies": {
+    "dotenv": "^16.4.7",
     "express": "^4.21.2"
   },
   "devDependencies": {
+    "@google/generative-ai": "^0.21.0",
     "@types/express": "^5.0.0",
     "nodemon": "^3.1.9",
     "ts-node": "^10.9.2",
