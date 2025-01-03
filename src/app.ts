@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import dotenv from "dotenv";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
@@ -12,7 +13,7 @@ const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
 const app = express();
 const PORT = 3000;
-
+app.use(cors());
 app.use(express.json());
 
 app.post("/api/v1/answer", async (req, res) => {
@@ -35,4 +36,3 @@ app.post("/api/v1/answer", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
-
