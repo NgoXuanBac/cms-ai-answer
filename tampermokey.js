@@ -28,10 +28,12 @@
             if (response.status === 200) {
               const result = JSON.parse(response.responseText);
               resolve(result.answer);
+            } else {
+              reject(`Error: Server responded with status ${response.status}`);
             }
           },
-          onerror: function (error) {
-            reject("Failure. Unable to connect to server.");
+          onerror: function () {
+            reject("Error: Unable to connect to server.");
           },
         });
       });
