@@ -22,7 +22,7 @@ app.post("/api/v1/answer", async (req, res) => {
     res.status(400).send("Question and prompt are required");
     return;
   }
-
+  
   try {
     const result = await model.generateContent(prompt);
     const answer = result.response.text();
