@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         FPT CMS Display Question, Answers with Images by #q Hash
+// @name         FPT CMS AI Answer
 // @namespace    http://tampermonkey.net/
 // @version      1.3
-// @description  hash #q with AI answers and image handling
+// @description  this isn't cheat tool
 // @author       YourName
 // @match        https://cmshn.fpt.edu.vn/*
 // @connect      localhost
@@ -13,7 +13,7 @@
 (function () {
   "use strict";
 
-  function fetchImageAsBase64(url) {
+  function fetchImage(url) {
     return new Promise((resolve, reject) => {
       GM_xmlhttpRequest({
         method: "GET",
@@ -33,59 +33,54 @@
     });
   }
 
-  function getQuestionIdFromHash() {
-    const hash = window.location.hash;
-    const match = hash.match(/#q(\d+)/);
-    return match ? match[1] : 1;
-  }
+  async function extractQuestion(container) {
+    const imageElements = Array.from(container.querySelectorAll("img"));
+    const images = [];
 
-  async function extractQuestionContent(questionElement) {
-    const textContent = questionElement.cloneNode(true);
-    const images = Array.from(textContent.querySelectorAll("img"));
-    const imageData = [];
-
-    for (const img of images) {
-      const src = img.getAttribute("src");
-      const fileType = src.split(".").pop();
+    for (const imageElement of imageElements) {
+      const src = imageElement.getAttribute("src");
+      const type = src.split(".").pop();
       try {
-        const base64File = await fetchImageAsBase64(src);
-        imageData.push({ file: base64File, type: fileType });
-        img.remove();
+        const file = await fetchImage(src);
+        images.push({ file, type });
+        imageElement.remove();
       } catch (error) {
-        console.error("Lỗi khi tải ảnh:", error);
+        console.error("error: ", error);
       }
     }
 
     return {
-      text: textContent.innerHTML.trim(),
-      images: imageData,
+      question: container.innerHTML.trim(),
+      images,
     };
   }
 
-  async function getQuestionAndAnswersById(questionId) {
-    const questionElements = document.querySelectorAll(".qtext");
-    const answerElements = document.querySelectorAll(".answer");
+  async function extractAnswers(container) {
+    const answerElements = Array.from(container.querySelectorAll("div"));
+    const answers = answerElements.map((element, index) => {
+        const questionText = element.querySelector("label").innerHTML.trim();
+        return {
+            num: index + 1,
+            question: questionText,
+        };
+    });
+    return answers;
+  }
 
-    if (questionElements.length === 0 || answerElements.length === 0) {
-      return null;
-    }
+  async function getQuestion() {
+    const containers = document.querySelectorAll('div.que.multichoice[id^=q]');
+    if(containers.length === 0) return null;
+    const id = window.location.hash.match(/#q(\d+)/)?.[1] || 1;
+    const container = containers.length === 1 ? containers[0] : containers[id - 1];
+    
+    const qtext = container.querySelector(".qtext");
+    const answer = container.querySelector(".answer");
+    const prompt = container.querySelector(".prompt");
 
-    const questionIndex = parseInt(questionId, 10) - 1;
+    const {question, images} = await extractQuestion(qtext.cloneNode(true));
+    const answers = await extractAnswers(answer.cloneNode(true));
 
-    if (questionIndex < 0 || questionIndex >= questionElements.length) {
-      return null;
-    }
-
-    const questionContent = await extractQuestionContent(
-      questionElements[questionIndex]
-    );
-
-    const selectedAnswerElement = answerElements[questionIndex];
-    const answer = selectedAnswerElement
-      ? [[questionIndex + 1, selectedAnswerElement.innerText.trim()]]
-      : [];
-
-    return { ...questionContent, answers: answer };
+    return { question, images, answers, prompt: prompt.innerHTML.trim() };
   }
 
   async function fetchAIAnswer(question, prompt, answers, images) {
@@ -97,7 +92,7 @@
         images: images,
       };
 
-      console.log("Payload gửi đi:", payload);
+      console.log("payload:", payload);
 
       GM_xmlhttpRequest({
         method: "POST",
@@ -111,18 +106,18 @@
             const result = JSON.parse(response.responseText);
             resolve(result.answer);
           } else {
-            reject(`Error: Server responded with status ${response.status}`);
+            reject(`error: server responded with status ${response.status}`);
           }
         },
         onerror: function () {
-          reject("Error: Unable to connect to server.");
+          reject("error: unable to connect to server.");
         },
       });
     });
   }
 
-  async function displayQuestionAndAnswer(
-    questionText,
+  async function displayAnswer(
+    question,
     answers,
     images,
     aiAnswer
@@ -143,7 +138,7 @@
 
     displayBox.innerHTML = `
             <div style="font-weight: bold; margin-bottom: 5px">Câu hỏi:</div>
-            <div>${questionText}</div>
+            <div>${question}</div>
             <div style="font-weight: bold; margin-top: 10px">Hình ảnh:</div>
             <div>${
               images.length > 0
@@ -165,36 +160,17 @@
   document.addEventListener("keydown", async (event) => {
     if (event.key === "x") {
       event.preventDefault();
-
-      const questionId = getQuestionIdFromHash();
-      let questionText, answers, images;
-
-      if (questionId) {
-        const questionData = await getQuestionAndAnswersById(questionId);
-        if (questionData) {
-          questionText = questionData.text;
-          answers = questionData.answers;
-          images = questionData.images;
-        } else {
-          alert(`Không tìm thấy câu hỏi có mã ${questionId}`);
-          return;
+      const {question, answers, images, prompt} = await getQuestion();
+      if (question) {
+        try {
+          const answer = await fetchAIAnswer(question, prompt, answers, images );
+          displayAnswer(question, answers, images, answer);
+        } catch (error) {
+          alert(error);
         }
       } else {
-        alert("Không có mã câu hỏi trong URL!");
-        return;
-      }
-
-      try {
-        const aiAnswer = await fetchAIAnswer(
-          questionText,
-          "chọn đáp án đúng nhất, không cần giải thích",
-          answers,
-          images
-        );
-        displayQuestionAndAnswer(questionText, answers, images, aiAnswer);
-      } catch (error) {
-        alert("Lỗi khi kết nối đến server: " + error);
-      }
+        alert(`error: not found question`);
+      }     
     }
   });
 })();
