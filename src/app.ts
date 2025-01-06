@@ -17,14 +17,26 @@ app.use(cors());
 app.use(express.json());
 
 app.post("/api/v1/answer", async (req, res) => {
-  const { question, prompt, answers, images } = req.body;
+  const { question, prompt, answers, images }: AnswerRequest = req.body;
   if (!question || !prompt) {
     res.status(400).send("Question and prompt are required");
     return;
   }
+  const attachments = images.map(({ type, file }) => ({
+    inlineData: {
+      data: file,
+      mimeType: `image/${type}`,
+    },
+  }));
 
   try {
-    const result = await model.generateContent(prompt + " " + question + " " + images + " " + answers);
+    const result = await model.generateContent([
+      ...attachments,
+      `Only answer the question without explanation. Question: ${question}.\n` +
+        `${prompt}:\n` +
+        answers.map((answer) => `${answer.num}. ${answer.content}`).join("\n") +
+        `\nPlease answer with number.`,
+    ]);
     const answer = result.response.text();
     res.status(200).json({ answer });
   } catch (error) {
@@ -36,3 +48,10 @@ app.post("/api/v1/answer", async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+
+interface AnswerRequest {
+  question: string;
+  prompt: string;
+  answers: { num: string; content: string }[];
+  images: { type: string; file: string }[];
+}
