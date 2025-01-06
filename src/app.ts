@@ -32,10 +32,12 @@ app.post("/api/v1/answer", async (req, res) => {
   try {
     const result = await model.generateContent([
       ...attachments,
-      `Only answer the question without explanation. Question: ${question}.\n` +
-        `${prompt}:\n` +
-        answers.map((answer) => `${answer.num}. ${answer.content}`).join("\n") +
-        `\nPlease answer with number.`,
+      `You will only answer multiple choice questions with single answers as they’re listed in the question. 
+       You will answer them correctly. You will not use any fullstops or punctuation. 
+       You will not explain your answers or write words before or after the answers. Only the answer itself will you respond with.
+       ${question}\n` +
+        `${prompt}\n` +
+        answers.map((answer) => `${answer.num}. ${answer.content}`).join("\n"),
     ]);
     const answer = result.response.text();
     res.status(200).json({ answer });
